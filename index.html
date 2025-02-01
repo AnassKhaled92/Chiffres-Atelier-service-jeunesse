@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Application de Suivi avec Firebase (Mobile-Friendly)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Styles généraux */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+      background-color: #fafafa;
+    }
+    h1, h2, h3 {
+      color: #333;
+      text-align: center;
+    }
+    /* Menu central */
+    #mainMenu {
+      max-width: 400px;
+      margin: 20px auto;
+      padding: 20px;
+      background-color: #f0f0f5;
+      border: 2px solid #333;
+      border-radius: 10px;
+      text-align: center;
+    }
+    #mainMenu button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      background-color: #4285f4;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-size: 1.1em;
+    }
+    #mainMenu button:hover {
+      background-color: #306acb;
+    }
+    /* Sections */
+    .section {
+      display: none;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .section.active {
+      display: block;
+    }
+    fieldset {
+      margin-bottom: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #fff;
+    }
+    label {
+      display: block;
+      margin: 5px 0 2px;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    input[type="submit"], button {
+      padding: 10px;
+      margin-top: 10px;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    /* Tableaux */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #aaa;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #eee;
+    }
+    .btn-delete {
+      background-color: orange;
+      color: #fff;
+      padding: 8px;
+      border: none;
+      border-radius: 5px;
+      width: 100%;
+    }
+    .btn-delete:hover {
+      background-color: #ff9933;
+    }
+    .export-button, .back-button {
+      background-color: #006600;
+      color: #fff;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .back-button {
+      background-color: #777;
+    }
+  </style>
+  <!-- Import Firebase modules via CDN (version 9) -->
+  <script type="module">
+    // Importer les fonctions nécessaires depuis Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.14.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.14.0/firebase-analytics.js";
+    import { getDatabase, ref, push, onValue, remove, child, get } from "https://www.gstatic.com/firebasejs/9.14.0/firebase-database.js";
+
+    // Remplacez ces valeurs par celles de votre projet Firebase obtenues dans la console.
+    const firebaseConfig = {
+      apiKey: "AIzaSyDftGnwxdrUZUFi5qC-9KtFcTyyLuZqeuk",
+      authDomain: "chiffre-atelier.firebaseapp.com",
+      databaseURL: "https://chiffre-atelier-default-rtdb.firebaseio.com",
+      projectId: "chiffre-atelier",
+      storageBucket: "chiffre-atelier.firebasestorage.app",
+      messagingSenderId: "57677864829",
+      appId: "1:57677864829:web:20410fae91251418cdf614",
+      measurementId: "G-XH37CQWT3V"
+    };
+
+    // Initialiser Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const database = getDatabase(app);
+
+    // Références pour chaque section
+    const refAccueilLibre = ref(database, "accueilLibreData");
+    const refActions = ref(database, "actionsData");
+    const refVacances = ref(database, "vacancesData");
+
+    // Rendre les références accessibles globalement
+    window.refAccueilLibre = refAccueilLibre;
+    window.refActions = refActions;
+    window.refVacances = refVacances;
+
+    console.log("Firebase initialisé avec succès !");
+
+    // Dès que le DOM est chargé, installer les fonctions de navigation et de manipulation
+    document.addEventListener("DOMContentLoaded", () => {
+
+      // Fonction de navigation
+      window.showSection = function(id) {
+        document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
+        if(id === 'mainMenu'){
+          document.getElementById('mainMenu').style.display = 'block';
+        } else {
+          document.getElementById('mainMenu').style.display = 'none';
+          document.getElementById(id).style.display = 'block';
+        }
+      };
+
+      // --------------------- Section Accueil Libre ---------------------
+      document.getElementById('accueilForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const date = document.getElementById('date').value;
+        const nombre = parseInt(document.getElementById('nombre').value);
+        const activite_nom = document.getElementById('activite_nom').value;
+        const activite_horaire = document.getElementById('activite_horaire').value;
+        const activite_nombre = document.getElementById('activite_nombre').value ? parseInt(document.getElementById('activite_nombre').value) : 0;
+        const enreg = { date, nombre, activite_nom, activite_horaire, activite_nombre };
+        push(refAccueilLibre, enreg)
+          .then(() => document.getElementById('accueilForm').reset())
+          .catch(err => alert("Erreur: " + err));
+      });
+      onValue(refAccueilLibre, snapshot => {
+        const data = snapshot.val() || {};
+        const keys = Object.keys(data);
+        const tbody = document.querySelector('#tableAccueil tbody');
+        tbody.innerHTML = "";
+        keys.forEach((key, index) => {
+          const enreg = data[key];
+          const d = new Date(enreg.date);
+          const day = ('0' + d.getDate()).slice(-2);
+          const month = ('0' + (d.getMonth()+1)).slice(-2);
+          const year = d.getFullYear();
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${day}/${month}/${year}</td>
+            <td>${enreg.nombre}</td>
+            <td>${enreg.activite_nom || ''}</td>
+            <td>${enreg.activite_horaire || ''}</td>
+            <td>${enreg.activite_nombre || 0}</td>
+            <td><button class="btn-delete" onclick="deleteAccueilFirebase('${key}')">Supprimer</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      });
+      window.deleteAccueilFirebase = function(key) {
+        remove(child(refAccueilLibre, key)).catch(err => alert("Erreur: " + err));
+      };
+      window.exportAccueilLibreCSV = async function() {
+        try {
+          const snapshot = await get(refAccueilLibre);
+          const data = snapshot.val() || {};
+          const keys = Object.keys(data);
+          if(keys.length === 0) {
+            alert("Aucune donnée à exporter pour Accueil libre.");
+            return;
+          }
+          const headers = ["ID","Date","Nombre (Accueil libre)","Nom Activité","Horaire Activité","Nombre (Activité)"];
+          let csvContent = headers.join(";") + "\n";
+          keys.forEach((key, index) => {
+            const enreg = data[key];
+            const d = new Date(enreg.date);
+            const day = ('0' + d.getDate()).slice(-2);
+            const month = ('0' + (d.getMonth()+1)).slice(-2);
+            const year = d.getFullYear();
+            const formattedDate = day + '/' + month + '/' + year;
+            const row = [
+              index + 1,
+              formattedDate,
+              enreg.nombre,
+              enreg.activite_nom || "",
+              enreg.activite_horaire || "",
+              enreg.activite_nombre || 0
+            ];
+            const cleanRow = row.map(cell => {
+              cell = cell === null || cell === undefined ? "" : cell.toString();
+              if(cell.indexOf(";") !== -1 || cell.indexOf(",") !== -1) {
+                cell = '"' + cell.replace(/"/g, '""') + '"';
+              }
+              return cell;
+            });
+            csvContent += cleanRow.join(";") + "\n";
+          });
+          downloadCSV(csvContent, "accueil_libre_firebase.csv");
+        } catch (error) {
+          alert("Erreur lors de l'exportation: " + error);
+        }
+      };
+
+      // --------------------- Section Actions ---------------------
+      document.getElementById('formActions').addEventListener('submit', e => {
+        e.preventDefault();
+        const act = {
+          nomProjet: document.getElementById('act_nomProjet').value,
+          descriptif: document.getElementById('act_descriptif').value,
+          date: document.getElementById('act_date').value,
+          duree: document.getElementById('act_duree').value,
+          objectif: document.getElementById('act_objectif').value,
+          critereEvaluation: document.getElementById('act_critereEvaluation').value,
+          resultats: document.getElementById('act_resultats').value,
+          budget: document.getElementById('act_budget').value ? parseInt(document.getElementById('act_budget').value) : 0,
+          nbActifs: document.getElementById('act_nbActifs').value ? parseInt(document.getElementById('act_nbActifs').value) : 0,
+          nbPassifs: document.getElementById('act_nbPassifs').value ? parseInt(document.getElementById('act_nbPassifs').value) : 0,
+          age7_10: document.getElementById('act_age7_10').value ? parseInt(document.getElementById('act_age7_10').value) : 0,
+          age11_14: document.getElementById('act_age11_14').value ? parseInt(document.getElementById('act_age11_14').value) : 0,
+          age15_17: document.getElementById('act_age15_17').value ? parseInt(document.getElementById('act_age15_17').value) : 0,
+          age18plus: document.getElementById('act_age18plus').value ? parseInt(document.getElementById('act_age18plus').value) : 0,
+          nbFilles: document.getElementById('act_nbFilles').value ? parseInt(document.getElementById('act_nbFilles').value) : 0,
+          nbGarcons: document.getElementById('act_nbGarcons').value ? parseInt(document.getElementById('act_nbGarcons').value) : 0,
+          qPonantChanteraines: document.getElementById('act_qPonantChanteraines').value ? parseInt(document.getElementById('act_qPonantChanteraines').value) : 0,
+          qJeanMoulinSysley: document.getElementById('act_qJeanMoulinSysley').value ? parseInt(document.getElementById('act_qJeanMoulinSysley').value) : 0,
+          qCaravelleChaillon: document.getElementById('act_qCaravelleChaillon').value ? parseInt(document.getElementById('act_qCaravelleChaillon').value) : 0,
+          qHautFondNoue: document.getElementById('act_qHautFondNoue').value ? parseInt(document.getElementById('act_qHautFondNoue').value) : 0,
+          qCentreVille: document.getElementById('act_qCentreVille').value ? parseInt(document.getElementById('act_qCentreVille').value) : 0,
+          qRiveSeineGalienni: document.getElementById('act_qRiveSeineGalienni').value ? parseInt(document.getElementById('act_qRiveSeineGalienni').value) : 0,
+          qHorsVLG: document.getElementById('act_qHorsVLG').value ? parseInt(document.getElementById('act_qHorsVLG').value) : 0,
+          totalQuartiers: document.getElementById('act_totalQuartiers').value ? parseInt(document.getElementById('act_totalQuartiers').value) : 0,
+          commentaire: document.getElementById('act_commentaire').value
+        };
+        push(refActions, act)
+          .then(() => {
+            document.getElementById('formActions').reset();
+            calcTotalQuartiers();
+          })
+          .catch(err => alert("Erreur: " + err));
+      });
+      onValue(refActions, snapshot => {
+        const data = snapshot.val() || {};
+        const keys = Object.keys(data);
+        const tbody = document.querySelector('#tableActions tbody');
+        tbody.innerHTML = "";
+        keys.forEach((key, index) => {
+          const act = data[key];
+          const d = new Date(act.date);
+          const day = ('0' + d.getDate()).slice(-2);
+          const month = ('0' + (d.getMonth()+1)).slice(-2);
+          const year = d.getFullYear();
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${act.nomProjet}</td>
+            <td>${act.descriptif}</td>
+            <td>${day}/${month}/${year}</td>
+            <td>${act.duree}</td>
+            <td>${act.objectif}</td>
+            <td>${act.critereEvaluation}</td>
+            <td>${act.resultats}</td>
+            <td>${act.budget}</td>
+            <td>${act.nbActifs}</td>
+            <td>${act.nbPassifs}</td>
+            <td>${act.age7_10}</td>
+            <td>${act.age11_14}</td>
+            <td>${act.age15_17}</td>
+            <td>${act.age18plus}</td>
+            <td>${act.nbFilles}</td>
+            <td>${act.nbGarcons}</td>
+            <td>${act.qPonantChanteraines}</td>
+            <td>${act.qJeanMoulinSysley}</td>
+            <td>${act.qCaravelleChaillon}</td>
+            <td>${act.qHautFondNoue}</td>
+            <td>${act.qCentreVille}</td>
+            <td>${act.qRiveSeineGalienni}</td>
+            <td>${act.qHorsVLG}</td>
+            <td>${act.totalQuartiers}</td>
+            <td>${act.commentaire}</td>
+            <td><button class="btn-delete" onclick="deleteActionFirebase('${key}')">Supprimer</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      });
+      window.deleteActionFirebase = function(key) {
+        remove(child(refActions, key)).catch(err => alert("Erreur: " + err));
+      };
+      function calcTotalQuartiers() {
+        const q1 = parseInt(document.getElementById('act_qPonantChanteraines').value) || 0;
+        const q2 = parseInt(document.getElementById('act_qJeanMoulinSysley').value) || 0;
+        const q3 = parseInt(document.getElementById('act_qCaravelleChaillon').value) || 0;
+        const q4 = parseInt(document.getElementById('act_qHautFondNoue').value) || 0;
+        const q5 = parseInt(document.getElementById('act_qCentreVille').value) || 0;
+        const q6 = parseInt(document.getElementById('act_qRiveSeineGalienni').value) || 0;
+        const q7 = parseInt(document.getElementById('act_qHorsVLG').value) || 0;
+        const total = q1 + q2 + q3 + q4 + q5 + q6 + q7;
+        document.getElementById('act_totalQuartiers').value = total;
+      }
+      ['act_qPonantChanteraines','act_qJeanMoulinSysley','act_qCaravelleChaillon','act_qHautFondNoue','act_qCentreVille','act_qRiveSeineGalienni','act_qHorsVLG'].forEach(function(id) {
+        document.getElementById(id).addEventListener('input', calcTotalQuartiers);
+      });
+      window.exportActionsCSV = async function() {
+        try {
+          const snapshot = await get(refActions);
+          const data = snapshot.val() || {};
+          const keys = Object.keys(data);
+          if(keys.length === 0) {
+            alert("Aucune donnée à exporter pour Actions.");
+            return;
+          }
+          const headers = [
+            "Nom du projet",
+            "Descriptif",
+            "Date",
+            "Durée",
+            "Objectif",
+            "Critère d'évaluation",
+            "Résultats",
+            "Budget consommé (€)",
+            "Jeunes actifs",
+            "Jeunes passifs",
+            "7-10 ans",
+            "11-14 ans",
+            "15-17 ans",
+            "18+ ans",
+            "Nombre de filles",
+            "Nombre de garçons",
+            "Ponant/Chanteraines",
+            "Jean-Moulin/Sysley",
+            "Caravelle/Chaillon",
+            "Haut et fond de la noue",
+            "Centre ville",
+            "Rive de Seine/Galienni",
+            "Hors VLG",
+            "Total Quartiers",
+            "Commentaire"
+          ];
+          let csvContent = headers.join(";") + "\n";
+          keys.forEach(function(key) {
+            const act = data[key];
+            const d = new Date(act.date);
+            const day = ('0' + d.getDate()).slice(-2);
+            const month = ('0' + (d.getMonth()+1)).slice(-2);
+            const year = d.getFullYear();
+            const formattedDate = day + '/' + month + '/' + year;
+            const row = [
+              act.nomProjet,
+              act.descriptif,
+              formattedDate,
+              act.duree,
+              act.objectif,
+              act.critereEvaluation,
+              act.resultats,
+              act.budget,
+              act.nbActifs,
+              act.nbPassifs,
+              act.age7_10,
+              act.age11_14,
+              act.age15_17,
+              act.age18plus,
+              act.nbFilles,
+              act.nbGarcons,
+              act.qPonantChanteraines,
+              act.qJeanMoulinSysley,
+              act.qCaravelleChaillon,
+              act.qHautFondNoue,
+              act.qCentreVille,
+              act.qRiveSeineGalienni,
+              act.qHorsVLG,
+              act.totalQuartiers,
+              act.commentaire
+            ];
+            const cleanRow = row.map(cell => {
+              cell = cell === null || cell === undefined ? "" : cell.toString();
+              if(cell.indexOf(";") !== -1 || cell.indexOf(",") !== -1) {
+                cell = '"' + cell.replace(/"/g, '""') + '"';
+              }
+              return cell;
+            });
+            csvContent += cleanRow.join(";") + "\n";
+          });
+          downloadCSV(csvContent, "actions_firebase.csv");
+        } catch(error) {
+          alert("Erreur lors de l'exportation: " + error);
+        }
+      };
+      window.exportVacancesCSV = async function() {
+        try {
+          const snapshot = await get(refVacances);
+          const data = snapshot.val() || {};
+          const keys = Object.keys(data);
+          if(keys.length === 0) {
+            alert("Aucune donnée à exporter pour Vacances scolaires.");
+            return;
+          }
+          const headers = [
+            "Date",
+            "Enfants - Accueil libre",
+            "Enfants - Activité",
+            "Enfants - Nb participants",
+            "Ados - Accueil libre",
+            "Ados - Activité",
+            "Ados - Nb participants"
+          ];
+          let csvContent = headers.join(";") + "\n";
+          keys.forEach(function(key) {
+            const vac = data[key];
+            const d = new Date(vac.date);
+            const day = ('0' + d.getDate()).slice(-2);
+            const month = ('0' + (d.getMonth()+1)).slice(-2);
+            const year = d.getFullYear();
+            const formattedDate = day + '/' + month + '/' + year;
+            const row = [
+              formattedDate,
+              vac.enf_libre,
+              vac.enf_act_nom || "",
+              vac.enf_act_nb || 0,
+              vac.ados_libre,
+              vac.ados_act_nom || "",
+              vac.ados_act_nb || 0
+            ];
+            const cleanRow = row.map(cell => {
+              cell = cell === null || cell === undefined ? "" : cell.toString();
+              if(cell.indexOf(";") !== -1 || cell.indexOf(",") !== -1) {
+                cell = '"' + cell.replace(/"/g, '""') + '"';
+              }
+              return cell;
+            });
+            csvContent += cleanRow.join(";") + "\n";
+          });
+          downloadCSV(csvContent, "vacances_firebase.csv");
+        } catch(error) {
+          alert("Erreur lors de l'exportation: " + error);
+        }
+      };
+
+      function downloadCSV(csvContent, filename) {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+          const url = URL.createObjectURL(blob);
+          link.setAttribute("href", url);
+          link.setAttribute("download", filename);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } else {
+          alert("Votre navigateur ne supporte pas le téléchargement automatique de fichiers.");
+        }
+      }
+
+    });
+  </script>
+</head>
+<body>
+  <!-- Le menu principal et les sections se trouvent ci-dessous -->
+
+  <div id="mainMenu">
+    <h2>Que souhaitez-vous enregistrer ?</h2>
+    <button onclick="showSection('accueilLibre')">Accueil libre (hors vacances)</button>
+    <button onclick="showSection('actions')">Actions</button>
+    <button onclick="showSection('vacances')">Vacances scolaires</button>
+  </div>
+
+  <!-- Section Accueil Libre -->
+  <div id="accueilLibre" class="section">
+    <h2>Accueil libre (hors vacances)</h2>
+    <form id="accueilForm">
+      <fieldset>
+        <legend>Nouvel enregistrement - Accueil libre</legend>
+        <label for="date">Date :</label>
+        <input type="date" id="date" required>
+        <label for="nombre">Nombre de personnes (Accueil libre) :</label>
+        <input type="number" id="nombre" required>
+        <h3>Activité parallèle (facultatif)</h3>
+        <label for="activite_nom">Nom de l'activité :</label>
+        <input type="text" id="activite_nom">
+        <label for="activite_horaire">Horaire de l'activité :</label>
+        <input type="text" id="activite_horaire" placeholder="ex : 14h-16h">
+        <label for="activite_nombre">Nombre de personnes (Activité) :</label>
+        <input type="number" id="activite_nombre">
+        <input type="submit" value="Enregistrer">
+      </fieldset>
+    </form>
+    <h3>Liste des enregistrements Accueil libre</h3>
+    <table id="tableAccueil">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Date</th>
+          <th>Nombre (Accueil libre)</th>
+          <th>Nom Activité</th>
+          <th>Horaire Activité</th>
+          <th>Nombre (Activité)</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <button class="export-button" onclick="exportAccueilLibreCSV()">Exporter en CSV</button>
+    <button class="back-button" onclick="showSection('mainMenu')">Retour au menu</button>
+  </div>
+
+  <!-- Section Actions -->
+  <div id="actions" class="section">
+    <h2>Actions</h2>
+    <form id="formActions">
+      <fieldset>
+        <legend>Informations Générales</legend>
+        <label for="act_nomProjet">Nom du projet :</label>
+        <input type="text" id="act_nomProjet" required>
+        <label for="act_descriptif">Descriptif :</label>
+        <textarea id="act_descriptif"></textarea>
+        <label for="act_date">Date :</label>
+        <input type="date" id="act_date" required>
+        <label for="act_duree">Durée :</label>
+        <input type="text" id="act_duree" placeholder="ex : 2 jours, 3h">
+      </fieldset>
+      <fieldset>
+        <legend>Objectif et Évaluation</legend>
+        <label for="act_objectif">Objectif de l'action :</label>
+        <textarea id="act_objectif"></textarea>
+        <label for="act_critereEvaluation">Critère d'évaluation :</label>
+        <textarea id="act_critereEvaluation"></textarea>
+        <label for="act_resultats">Résultats :</label>
+        <textarea id="act_resultats"></textarea>
+      </fieldset>
+      <fieldset>
+        <legend>Budget et Participants</legend>
+        <label for="act_budget">Budget consommé (€) :</label>
+        <input type="number" id="act_budget" min="0">
+        <label for="act_nbActifs">Nombre de jeunes actifs :</label>
+        <input type="number" id="act_nbActifs" min="0">
+        <label for="act_nbPassifs">Nombre de jeunes passifs :</label>
+        <input type="number" id="act_nbPassifs" min="0">
+      </fieldset>
+      <fieldset>
+        <legend>Répartition des Âges</legend>
+        <label for="act_age7_10">7-10 ans :</label>
+        <input type="number" id="act_age7_10" min="0" value="0">
+        <label for="act_age11_14">11-14 ans :</label>
+        <input type="number" id="act_age11_14" min="0" value="0">
+        <label for="act_age15_17">15-17 ans :</label>
+        <input type="number" id="act_age15_17" min="0" value="0">
+        <label for="act_age18plus">18 ans et + :</label>
+        <input type="number" id="act_age18plus" min="0" value="0">
+      </fieldset>
+      <fieldset>
+        <legend>Genre</legend>
+        <label for="act_nbFilles">Nombre de filles :</label>
+        <input type="number" id="act_nbFilles" min="0">
+        <label for="act_nbGarcons">Nombre de garçons :</label>
+        <input type="number" id="act_nbGarcons" min="0">
+      </fieldset>
+      <fieldset>
+        <legend>Quartiers d'origine</legend>
+        <label for="act_qPonantChanteraines">Ponant/Chanteraines :</label>
+        <input type="number" id="act_qPonantChanteraines" min="0" value="0">
+        <label for="act_qJeanMoulinSysley">Jean-Moulin/Sysley :</label>
+        <input type="number" id="act_qJeanMoulinSysley" min="0" value="0">
+        <label for="act_qCaravelleChaillon">Caravelle/Chaillon :</label>
+        <input type="number" id="act_qCaravelleChaillon" min="0" value="0">
+        <label for="act_qHautFondNoue">Haut et fond de la noue :</label>
+        <input type="number" id="act_qHautFondNoue" min="0" value="0">
+        <label for="act_qCentreVille">Centre ville :</label>
+        <input type="number" id="act_qCentreVille" min="0" value="0">
+        <label for="act_qRiveSeineGalienni">Rive de Seine/Galienni :</label>
+        <input type="number" id="act_qRiveSeineGalienni" min="0" value="0">
+        <label for="act_qHorsVLG">Hors VLG :</label>
+        <input type="number" id="act_qHorsVLG" min="0" value="0">
+        <label for="act_totalQuartiers">Total (automatique) :</label>
+        <input type="number" id="act_totalQuartiers" readonly value="0">
+      </fieldset>
+      <fieldset>
+        <legend>Commentaire</legend>
+        <textarea id="act_commentaire"></textarea>
+      </fieldset>
+      <input type="submit" value="Enregistrer">
+    </form>
+    <h3>Liste des Actions</h3>
+    <table id="tableActions">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nom du projet</th>
+          <th>Descriptif</th>
+          <th>Date</th>
+          <th>Durée</th>
+          <th>Objectif</th>
+          <th>Critère</th>
+          <th>Résultats</th>
+          <th>Budget (€)</th>
+          <th>Actifs</th>
+          <th>Passifs</th>
+          <th>7-10 ans</th>
+          <th>11-14 ans</th>
+          <th>15-17 ans</th>
+          <th>18+ ans</th>
+          <th>Filles</th>
+          <th>Garçons</th>
+          <th>Ponant/Chanteraines</th>
+          <th>Jean-Moulin/Sysley</th>
+          <th>Caravelle/Chaillon</th>
+          <th>Haut et fond de la noue</th>
+          <th>Centre ville</th>
+          <th>Rive de Seine/Galienni</th>
+          <th>Hors VLG</th>
+          <th>Total Quartiers</th>
+          <th>Commentaire</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <button class="export-button" onclick="exportActionsCSV()">Exporter en CSV</button>
+    <button class="back-button" onclick="showSection('mainMenu')">Retour au menu</button>
+  </div>
+
+  <!-- Section Vacances scolaires -->
+  <div id="vacances" class="section">
+    <h2>Vacances scolaires</h2>
+    <form id="formVacances">
+      <fieldset>
+        <legend>Nouvel enregistrement - Vacances scolaires</legend>
+        <label for="vac_date">Date :</label>
+        <input type="date" id="vac_date" required>
+        <h3>Club Enfants</h3>
+        <label for="vac_enf_libre">Accueil libre (nb pers.) :</label>
+        <input type="number" id="vac_enf_libre" required>
+        <label for="vac_enf_act_nom">Nom de l'activité :</label>
+        <input type="text" id="vac_enf_act_nom">
+        <label for="vac_enf_act_nb">Nb participants :</label>
+        <input type="number" id="vac_enf_act_nb">
+        <h3>Club Ados</h3>
+        <label for="vac_ados_libre">Accueil libre (nb pers.) :</label>
+        <input type="number" id="vac_ados_libre" required>
+        <label for="vac_ados_act_nom">Nom de l'activité :</label>
+        <input type="text" id="vac_ados_act_nom">
+        <label for="vac_ados_act_nb">Nb participants :</label>
+        <input type="number" id="vac_ados_act_nb">
+        <input type="submit" value="Enregistrer">
+      </fieldset>
+    </form>
+    <h3>Liste des enregistrements Vacances scolaires</h3>
+    <table id="tableVacances">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Date</th>
+          <th>Enfants - Accueil libre</th>
+          <th>Enfants - Activité</th>
+          <th>Enfants - Nb participants</th>
+          <th>Ados - Accueil libre</th>
+          <th>Ados - Activité</th>
+          <th>Ados - Nb participants</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <button class="export-button" onclick="exportVacancesCSV()">Exporter en CSV</button>
+    <button class="back-button" onclick="showSection('mainMenu')">Retour au menu</button>
+  </div>
+  
+</body>
+</html>
